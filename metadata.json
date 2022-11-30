@@ -1,0 +1,19 @@
+{
+  "icon": "docker.svg",
+  "vm": {
+    "composefile": "docker-compose.yaml",
+    "exposes": {
+      "socket": "extension-fetchit.sock"
+    }
+  },
+  "ui": {
+    "dashboard-tab": {
+      "title": "Fetchit",
+      "src": "index.html",
+      "root": "ui",
+      "backend": {
+        "socket": "extension-fetchit.sock"
+      }
+    }
+  }
+}
