@@ -9,6 +9,7 @@
     "@emotion/react": "^11.9.0",
     "@emotion/styled": "^11.8.1",
     "@mui/material": "^5.6.1",
+    "@uiw/react-textarea-code-editor": "^2.0.6",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-scripts": "5.0.1"
@@ -31,5 +32,13 @@
     "@types/node": "^18.7.18",
     "@types/react-dom": "^17.0.2",
     "typescript": "^4.8.3"
-  }
+  },
+	"prettier": {
+		"arrowParens": "always",
+		"tabWidth": 2,
+		"printWidth": 80,
+		"trailingComma": "all",
+		"singleQuote": false,
+		"useTabs": false
+	}
 }
