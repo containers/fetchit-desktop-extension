@@ -1,5 +1,5 @@
 {
-  "name": "ui",
+  "name": "fetchit-desktop",
   "version": "0.1.0",
   "private": true,
   "homepage": ".",
@@ -8,8 +8,12 @@
     "@docker/extension-api-client": "0.3.0",
     "@emotion/react": "^11.9.0",
     "@emotion/styled": "^11.8.1",
+    "@mui/icons-material": "^5.10.16",
     "@mui/material": "^5.6.1",
+    "@mui/x-data-grid": "^5.17.14",
+    "@types/js-yaml": "^4.0.5",
     "@uiw/react-textarea-code-editor": "^2.0.6",
+    "js-yaml": "^4.1.0",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-scripts": "5.0.1"
@@ -32,13 +36,5 @@
     "@types/node": "^18.7.18",
     "@types/react-dom": "^17.0.2",
     "typescript": "^4.8.3"
-  },
-	"prettier": {
-		"arrowParens": "always",
-		"tabWidth": 2,
-		"printWidth": 80,
-		"trailingComma": "all",
-		"singleQuote": false,
-		"useTabs": false
-	}
+  }
 }

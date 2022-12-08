@@ -1,10 +1,10 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import ScopedCssBaseline from '@mui/material/ScopedCssBaseline';
+import React from "react";
+import ReactDOM from "react-dom";
+import ScopedCssBaseline from "@mui/material/ScopedCssBaseline";
 
-import { DockerMuiThemeProvider } from '@docker/docker-mui-theme';
+import { DockerMuiThemeProvider } from "@docker/docker-mui-theme";
 
-import { App } from './App';
+import { App } from "./App";
 
 ReactDOM.render(
   <React.StrictMode>
@@ -14,10 +14,14 @@ ReactDOM.render(
       some minimal Docker theming.
     */}
     <DockerMuiThemeProvider>
-      <ScopedCssBaseline >
-      <App />
-			</ScopedCssBaseline>
+      <ScopedCssBaseline
+        style={{
+          backgroundColor: "#27272a",
+        }}
+      >
+        <App />
+      </ScopedCssBaseline>
     </DockerMuiThemeProvider>
   </React.StrictMode>,
-  document.getElementById('root'),
+  document.getElementById("root"),
 );
