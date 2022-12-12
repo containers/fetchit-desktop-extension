@@ -7,12 +7,16 @@ export const colors = {
   textPrimary: "#eaeaeb",
   textSecondary: "#f7f7f7",
   violet400: "rgb(167 139 250)",
+  borderColor: "#535867",
+  black: "rgb(0 0 0)",
 } as const;
 
 type ColorMap = {
   [name: string]: React.CSSProperties;
 };
 
+const containerPaddingX = 8;
+const containerPaddingY = 4;
 export const styles: ColorMap = {
   codeEditor: {
     minWidth: "100%",
@@ -26,7 +30,17 @@ export const styles: ColorMap = {
     fontFamily:
       "ui-monospace,SFMono-Regular,SF Mono,Consolas,Liberation Mono,Menlo,monospace",
   },
-  box: { borderColor: "#535867", borderWidth: "1px", borderRadius: "0.25rem" },
+  box: {
+    borderColor: colors.black,
+    borderWidth: "1px",
+    borderRadius: "0.25rem",
+    backgroundColor: colors.backgroundSecondary,
+    paddingLeft: containerPaddingX,
+    paddingRight: containerPaddingX,
+    paddingTop: containerPaddingY,
+    paddingBottom: containerPaddingY,
+    minWidth: "100%",
+  },
   typeographyPrimary: {
     color: colors.textPrimary,
   },

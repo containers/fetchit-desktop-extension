@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Button from "@mui/material/Button";
-import { createDockerDesktopClient } from "@docker/extension-api-client";
+// import { createDockerDesktopClient } from "@docker/extension-api-client";
 import { v1 } from "@docker/extension-api-client-types";
 import {
   Stack,
@@ -12,34 +12,45 @@ import {
 } from "@mui/material";
 import CodeTextArea from "@uiw/react-textarea-code-editor";
 import Info from "./Log";
-import { Container as ContainerResponse, ContainerDetails } from "./types";
+import type {
+  Container as ContainerResponse,
+  ContainerDetails,
+  FetchItConfigMethod,
+} from "./types";
 import { load, dump } from "js-yaml";
 import ContainerList from "./components/ContainerList";
 import { colors, styles } from "./style";
+import { OpenDialogResult } from "@docker/extension-api-client-types/dist/v1/dialog";
+import FetchItInput from "./components/FetchitInput";
+import { isNativeError } from "util/types";
+
 // Note: This line relies on Docker Desktop's presence as a host application.
 // If you're running this React app in a browser, it won't work properly.
-const client = createDockerDesktopClient();
 const FetchItContainerName = "podman-desktop-fetchit";
 const FetchItConfigEnv = "FETCHIT_CONFIG";
+const FetchItConfigURLEnv = "FETCHIT_CONFIG_URL";
 const OwnedByLabel = "owned-by";
 const OwnedByValue = "fetchit-podman-desktop";
 
-function getDockerDesktopClient(): v1.DockerDesktopClient {
-  return client;
-}
+const getDockerDesktopClient = (): v1.DockerDesktopClient => {
+  return window.ddClient as v1.DockerDesktopClient;
+};
 
 export function App() {
   const [podmanInfo, setPodmanInfo] = useState("");
   const [debugInfo, setDebugInfo] = useState("");
   const [ready, setReady] = useState(false);
   const [fetchItConfig, setFetchItConfig] = useState("");
+  const [fetchItConfigURL, setFetchItConfigURL] = useState("");
+  const [fetchItConfigType, setFetchItConfigType] =
+    useState<FetchItConfigMethod>("manual");
   const [knownArch, setKnownArch] = useState("");
   const [containers, setContainers] = useState<ContainerResponse[]>([]);
   // these states are used for performing the first initialization of FetchIt
   // in the event that the extension refreshes but a config exists
   const [timesContainersFetched, setTimesContainersFetched] = useState(0);
   const [fetchItNeedsConfig, setFetchItNeedsConfig] = useState(true);
-  const ddClient = getDockerDesktopClient();
+  const ddClient: v1.DockerDesktopClient = getDockerDesktopClient();
 
   const getFetchItImage = (): string => {
     const archDetected = ddClient.host.arch;
@@ -47,7 +58,7 @@ export function App() {
     const fetchItArm = `${fetchItRepo}/fetchit-arm`;
     const fetchItAmd = `${fetchItRepo}/fetchit-amd`;
     // this is the one where we just try it and see if it works
-    const fetchItDefault = `${fetchItRepo}/fetchit`;
+    const fetchItDefault = `${fetchItRepo}/fetchit-arm`;
     switch (archDetected) {
       case "amd":
         return fetchItAmd;
@@ -93,17 +104,40 @@ export function App() {
       return [];
     }
   };
-  const launchFetchIt = async (config: string) => {
+
+  /**
+   *
+   * @param config Config YAML for FetchIt
+   * @param configURL URL to a FetchIt config
+   * @returns environment variable to configure fetchit
+   */
+  const getFetchItConfig = (config: string, configURL: string): string => {
+    // determine mode
+    let fetchItConfigOpt: string;
+    switch (fetchItConfigType) {
+      case "manual":
+        const serializedYaml = load(config);
+        const normalizedYAML = dump(serializedYaml, {
+          forceQuotes: true,
+          quotingType: '"',
+        });
+        fetchItConfigOpt = `${FetchItConfigEnv}=${normalizedYAML}`;
+        break;
+      case "url":
+        fetchItConfigOpt = `${FetchItConfigURLEnv}=${configURL}`;
+        break;
+      default:
+        throw new Error("invalid input type being used");
+    }
+    return fetchItConfigOpt;
+  };
+
+  const launchFetchIt = async (config: string, configURL: string) => {
     updateDebugInfo("launching docker cli");
     const fetchItImage = getFetchItImage();
     // normalize yaml so it's safe to load as an environment variable
     updateDebugInfo("using fetchit image: " + fetchItImage);
-    const serializedYaml = load(config);
-    const normalizedYAML = dump(serializedYaml, {
-      forceQuotes: true,
-      quotingType: '"',
-    });
-    const fetchItConfigOpt = `${FetchItConfigEnv}=${normalizedYAML}`;
+    const fetchItConfigOpt = getFetchItConfig(config, configURL);
     updateDebugInfo(
       "passing in the following config argument:\n" + fetchItConfigOpt,
     );
@@ -151,10 +185,12 @@ export function App() {
       .then((r) => console.log("got result:"));
   };
 
+  //  TODO: use this once host information is exposed
   // initialization hook
   useEffect(() => {
     const checkInterval = setInterval(() => {
-      if (ddClient.host.arch !== "") {
+      const dockerClient = window.ddClient as v1.DockerDesktopClient;
+      if (dockerClient.host.arch !== "") {
         setKnownArch(ddClient.host.arch);
         setReady(true);
       }
@@ -230,10 +266,10 @@ export function App() {
 
   useEffect(() => {
     const interval = setInterval(async () => {
-      // // // filter out the fetchit containers
-      // const latestContainers = await fetchLatestContainers();
-      // setContainers(latestContainers);
-      // setTimesContainersFetched(timesContainersFetched + 1);
+      // filter out the fetchit containers
+      const latestContainers = await fetchLatestContainers();
+      setContainers(latestContainers);
+      setTimesContainersFetched(timesContainersFetched + 1);
     }, 5000);
 
     return () => clearInterval(interval);
@@ -244,13 +280,103 @@ export function App() {
     return typeof fetchItLabel !== "undefined" && fetchItLabel === "fetchit";
   });
 
+  const handleFetchItConfigTypeChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const targetValue = e.target.value as FetchItConfigMethod;
+    setFetchItConfigType(targetValue);
+  };
+
+  const handleFetchItConfigURLChange = (
+    e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>,
+  ) => {
+    setFetchItConfigURL(e.target.value);
+  };
+
+  //  TODO: make this work once host information is available within ddClient
+  // const [arch, setArch] = useState("");
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     const ddClient: v1.DockerDesktopClient =
+  //       window.ddClient as v1.DockerDesktopClient;
+  //     if (typeof ddClient === "undefined") {
+  //       setArch("arch not ready yet");
+  //       return;
+  //     }
+  //     if (typeof ddClient.host === "undefined") {
+  //       setArch("docker client exists but arch is not ready yet");
+  //       return;
+  //     }
+  //     if (ddClient.host.arch === "") {
+  //       setArch("host exists but arch is not available");
+  //       return;
+  //     }
+  //     setArch(ddClient.host.arch);
+  //   }, 500);
+  //   return () => clearInterval(interval);
+  // }, []);
+
+  // try {
+  //   // const ddClient = createDockerDesktopClient();
+  //   // const platformInfo = window.platformInfo;
+  // } catch (e) {
+  //   return (
+  //     <Container
+  //       style={{
+  //         backgroundColor: colors.backgroundPrimary,
+  //       }}
+  //     >
+  //       <Typography variant="h2" style={styles.typeographyPrimary}>
+  //         Could not create ddclient: {e}
+  //       </Typography>
+  //     </Container>
+  //   );
+  // }
+  // return (
+  //   <Container
+  //     style={{
+  //       backgroundColor: colors.backgroundPrimary,
+  //     }}
+  //   >
+  //     <Typography variant="h2" style={styles.typeographyPrimary}>
+  //       detected arch: {arch}
+  //     </Typography>
+  //   </Container>
+  // );
+
+  // try {
+  //   // const ddClient = createDockerDesktopClient();
+  // } catch (e) {
+  //   return (
+  //     <Container
+  //       style={{
+  //         backgroundColor: colors.backgroundPrimary,
+  //       }}
+  //     >
+  //       <Typography variant="h2" style={styles.typeographyPrimary}>
+  //         Could not create ddClient: {e}
+  //       </Typography>
+  //     </Container>
+  //   );
+  // } finally {
+  //   <Container
+  //     style={{
+  //       backgroundColor: colors.backgroundPrimary,
+  //     }}
+  //   >
+  //     <Typography variant="h2" style={styles.typeographyPrimary}>
+  //       Successfully created the docker desktop client
+  //     </Typography>
+  //   </Container>;
+  // }
+
   return (
     <Container
       style={{
         backgroundColor: colors.backgroundPrimary,
       }}
     >
-      <Typography variant="h2" style={styles.typeographyPrimary}>
+      <Typography variant="h1" style={styles.typeographyPrimary}>
         FetchIt
       </Typography>
       <Typography
@@ -260,9 +386,9 @@ export function App() {
       >
         Please provide a configuration for your FetchIt instance:
       </Typography>
-      {ready && (
-        <Stack direction="column" alignItems="start" spacing={2} sx={{ mt: 4 }}>
-          {/* {ready ? (
+      {/* {ready && ( */}
+      <Stack direction="column" alignItems="start" spacing={2} sx={{ mt: 4 }}>
+        {/* {ready ? (
           <Info
             text={`FetchIt is ready, using image: ${getFetchItImage()} since we detected architecture: ${
               ddClient.host.arch
@@ -271,50 +397,41 @@ export function App() {
         ) : (
           <Info text="FetchIt is still loading, waiting for host architecture to be known" />
         )} */}
-          <Info text={`known architecture: ${knownArch}`} />
-          <CodeTextArea
-            value={fetchItConfig}
-            language="yaml"
-            placeholder="Enter your FetchIt config here."
-            padding={15}
-            onChange={(e) => setFetchItConfig(e.target.value)}
-            style={styles.codeEditor}
-          />
-          <Box
-            style={{
-              borderColor: "#535867",
-              borderWidth: "1px",
-              borderRadius: "0.25rem",
-            }}
-          >
+        <FetchItInput
+          codeAreaValue={fetchItConfig}
+          onCodeAreaChange={(e) => setFetchItConfig(e.target.value)}
+          fetchItConfigType={fetchItConfigType}
+          onFetchItConfigTypeChange={handleFetchItConfigTypeChange}
+          fetchItConfigURL={fetchItConfigURL}
+          onURLChange={handleFetchItConfigURLChange}
+        />
+        {debugInfo !== "" && (
+          <Box style={styles.box}>
             <Info text={debugInfo} />
           </Box>
+        )}
+        {podmanInfo !== "" && (
           <Box style={styles.box}>
             <Info text={podmanInfo} />
           </Box>
-          <Button
-            // onClick={() => launchFetchIt(fetchItConfig)}
-            sx={{
-              mt: 2,
-              backgroundColor: colors.buttonPrimary,
-            }}
-            variant="contained"
-            // style={styles.box}
-          >
-            Submit
-          </Button>
-          <ContainerList containers={fetchItContainers} />
-        </Stack>
-      )}
-      {!ready && (
-        <Typography
-          variant="body1"
-          style={styles.typeographySecondary}
-          sx={{ mt: 2 }}
+        )}
+        <Button
+          onClick={() => launchFetchIt(fetchItConfig, fetchItConfigURL)}
+          sx={{
+            mt: 2,
+            backgroundColor: colors.buttonPrimary,
+          }}
+          variant="contained"
+          // style={styles.box}
         >
-          FetchIt is still waiting for the host architecture to be available
+          Submit
+        </Button>
+        <Typography variant="h2" style={styles.typeographyPrimary}>
+          Running Containers
         </Typography>
-      )}
+        <ContainerList containers={fetchItContainers} />
+      </Stack>
+      {/* )} */}
       {/* <TextField>{windowState}</TextField> */}
     </Container>
   );

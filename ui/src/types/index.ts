@@ -83,3 +83,5 @@ export type ContainerDetails = {
   [key: string]: any;
   Config?: ContainerConfig;
 } & Container;
+
+export type FetchItConfigMethod = "url" | "manual";

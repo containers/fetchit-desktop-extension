@@ -280,7 +280,7 @@ const ContainerList = (props: ContainerListProps) => {
           </TableRow>
         </TableHead>
         <TableBody>
-          {testContainers.map((c, i) => {
+          {containers.map((c, i) => {
             const date = new Date(c.Created * 1000);
             const createdAtStr = `${date.toLocaleDateString(
               "en-US",
