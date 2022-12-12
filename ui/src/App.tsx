@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Button from "@mui/material/Button";
-// import { createDockerDesktopClient } from "@docker/extension-api-client";
+import { createDockerDesktopClient } from "@docker/extension-api-client";
 import { v1 } from "@docker/extension-api-client-types";
 import {
   Stack,
@@ -29,16 +29,16 @@ const OwnedByValue = "fetchit-podman-desktop";
 // }
 
 export function App() {
-  const [podmanInfo, setPodmanInfo] = useState("");
-  const [debugInfo, setDebugInfo] = useState("");
-  const [ready, setReady] = useState(false);
-  const [fetchItConfig, setFetchItConfig] = useState("");
-  const [knownArch, setKnownArch] = useState("");
-  const [containers, setContainers] = useState<ContainerResponse[]>([]);
-  // these states are used for performing the first initialization of FetchIt
-  // in the event that the extension refreshes but a config exists
-  const [timesContainersFetched, setTimesContainersFetched] = useState(0);
-  const [fetchItNeedsConfig, setFetchItNeedsConfig] = useState(true);
+  // const [podmanInfo, setPodmanInfo] = useState("");
+  // const [debugInfo, setDebugInfo] = useState("");
+  // const [ready, setReady] = useState(false);
+  // const [fetchItConfig, setFetchItConfig] = useState("");
+  // const [knownArch, setKnownArch] = useState("");
+  // const [containers, setContainers] = useState<ContainerResponse[]>([]);
+  // // these states are used for performing the first initialization of FetchIt
+  // // in the event that the extension refreshes but a config exists
+  // const [timesContainersFetched, setTimesContainersFetched] = useState(0);
+  // const [fetchItNeedsConfig, setFetchItNeedsConfig] = useState(true);
   // const ddClient = getDockerDesktopClient();
 
   // const getFetchItImage = (): string => {
@@ -60,10 +60,10 @@ export function App() {
   //   }
   // };
 
-  const updateDebugInfo = (s: string) => {
-    const prevMessage = debugInfo;
-    setDebugInfo(`${prevMessage}\n${s}`);
-  };
+  // const updateDebugInfo = (s: string) => {
+  //   const prevMessage = debugInfo;
+  //   setDebugInfo(`${prevMessage}\n${s}`);
+  // };
 
   // const fetchLatestContainers = async (): Promise<ContainerResponse[]> => {
   //   try {
@@ -165,84 +165,98 @@ export function App() {
   //   }
   // }, [ready]);
 
+  // useEffect(() => {
+  // // not a valid state for initializaiton
+  // if (timesContainersFetched !== 1 || !fetchItNeedsConfig) {
+  //   return;
+  // }
+  // // user has already entered their own data here
+  // if (fetchItConfig !== "") {
+  //   return;
+  // }
+  // // there may exist a running fetchit container here so we want to grab its config
+  // const filteredContainers = containers.filter((c) => {
+  //   for (let i = 0; i < c.Names.length; i++) {
+  //     if (c.Names[i].includes(FetchItContainerName)) {
+  //       return true;
+  //     }
+  //   }
+  //   return false;
+  // });
+  // // no fetchit found
+  // if (filteredContainers.length === 0) {
+  //   setFetchItNeedsConfig(false);
+  //   return;
+  // }
+  // // fetchit exists, pull config and init
+  // ddClient.docker.cli
+  //   .exec("inspect", [FetchItContainerName])
+  //   .then((r) => {
+  //     if (r.stderr !== "") {
+  //       return;
+  //     }
+  //     const containerList = JSON.parse(r.stdout) as ContainerDetails[];
+  //     if (
+  //       typeof containerList === "undefined" ||
+  //       containerList.length === 0
+  //     ) {
+  //       return;
+  //     }
+  //     // extract config from command
+  //     const fetchitDetails = containerList.pop();
+  //     if (!fetchitDetails.Config) {
+  //       return;
+  //     }
+  //     const extractedConfigEnv = fetchitDetails.Config.Env.find((e) =>
+  //       e.startsWith(FetchItConfigEnv),
+  //     );
+  //     if (typeof extractedConfigEnv === "undefined") {
+  //       return;
+  //     }
+  //     // strip out "CONFIG_NAME=" so only raw yaml is left
+  //     const rawConfig = extractedConfigEnv.substring(
+  //       FetchItConfigEnv.length + 1,
+  //     );
+  //     const serializedConfig = load(rawConfig);
+  //     const normalizedConfig = dump(serializedConfig, {
+  //       forceQuotes: true,
+  //       quotingType: '"',
+  //       sortKeys: true,
+  //     });
+  //     setFetchItConfig(normalizedConfig);
+  //   })
+  //   .catch((e) => setDebugInfo("could not inspect fetchit container: " + e));
+  //   setFetchItNeedsConfig(false);
+  // }, [timesContainersFetched]);
+
+  // useEffect(() => {
+  //   const interval = setInterval(async () => {
+  //     // // filter out the fetchit containers
+  //     // const latestContainers = await fetchLatestContainers();
+  //     // setContainers(latestContainers);
+  //     setTimesContainersFetched(timesContainersFetched + 1);
+  //   }, 5000);
+
+  //   return () => clearInterval(interval);
+  // }, []);
+
+  // const fetchItContainers = containers.filter((c) => {
+  //   const fetchItLabel = c.Labels["owned-by"];
+  //   return typeof fetchItLabel !== "undefined" && fetchItLabel === "fetchit";
+  // });
+
+  const [msg, setMsg] = useState("");
   useEffect(() => {
-    // // not a valid state for initializaiton
-    // if (timesContainersFetched !== 1 || !fetchItNeedsConfig) {
-    //   return;
-    // }
-    // // user has already entered their own data here
-    // if (fetchItConfig !== "") {
-    //   return;
-    // }
-    // // there may exist a running fetchit container here so we want to grab its config
-    // const filteredContainers = containers.filter((c) => {
-    //   for (let i = 0; i < c.Names.length; i++) {
-    //     if (c.Names[i].includes(FetchItContainerName)) {
-    //       return true;
-    //     }
-    //   }
-    //   return false;
-    // });
-    // // no fetchit found
-    // if (filteredContainers.length === 0) {
-    //   setFetchItNeedsConfig(false);
-    //   return;
-    // }
-    // // fetchit exists, pull config and init
-    // ddClient.docker.cli
-    //   .exec("inspect", [FetchItContainerName])
-    //   .then((r) => {
-    //     if (r.stderr !== "") {
-    //       return;
-    //     }
-    //     const containerList = JSON.parse(r.stdout) as ContainerDetails[];
-    //     if (
-    //       typeof containerList === "undefined" ||
-    //       containerList.length === 0
-    //     ) {
-    //       return;
-    //     }
-    //     // extract config from command
-    //     const fetchitDetails = containerList.pop();
-    //     if (!fetchitDetails.Config) {
-    //       return;
-    //     }
-    //     const extractedConfigEnv = fetchitDetails.Config.Env.find((e) =>
-    //       e.startsWith(FetchItConfigEnv),
-    //     );
-    //     if (typeof extractedConfigEnv === "undefined") {
-    //       return;
-    //     }
-    //     // strip out "CONFIG_NAME=" so only raw yaml is left
-    //     const rawConfig = extractedConfigEnv.substring(
-    //       FetchItConfigEnv.length + 1,
-    //     );
-    //     const serializedConfig = load(rawConfig);
-    //     const normalizedConfig = dump(serializedConfig, {
-    //       forceQuotes: true,
-    //       quotingType: '"',
-    //       sortKeys: true,
-    //     });
-    //     setFetchItConfig(normalizedConfig);
-    //   })
-    //   .catch((e) => setDebugInfo("could not inspect fetchit container: " + e));
-    setFetchItNeedsConfig(false);
-  }, [timesContainersFetched]);
-
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      // // filter out the fetchit containers
-      // const latestContainers = await fetchLatestContainers();
-      // setContainers(latestContainers);
-      setTimesContainersFetched(timesContainersFetched + 1);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchItContainers = containers.filter((c) => {
-    const fetchItLabel = c.Labels["owned-by"];
-    return typeof fetchItLabel !== "undefined" && fetchItLabel === "fetchit";
+    setInterval(() => {
+      if (
+        typeof window.platformInfo !== "undefined" &&
+        window.platformInfo.arch !== ""
+      ) {
+        setMsg("arch known");
+      } else {
+        setMsg("waiting for arch info");
+      }
+    }, 500);
   });
 
   return (
@@ -259,10 +273,18 @@ export function App() {
         style={styles.typeographySecondary}
         sx={{ mt: 2 }}
       >
+        {msg}
+      </Typography>
+
+      {/* <Typography
+        variant="body1"
+        style={styles.typeographySecondary}
+        sx={{ mt: 2 }}
+      >
         Please provide a configuration for your FetchIt instance:
       </Typography>
       <Stack direction="column" alignItems="start" spacing={2} sx={{ mt: 4 }}>
-        {/* {ready ? (
+        {ready ? (
           <Info
             text={`FetchIt is ready, using image: ${getFetchItImage()} since we detected architecture: ${
               ddClient.host.arch
@@ -270,7 +292,7 @@ export function App() {
           />
         ) : (
           <Info text="FetchIt is still loading, waiting for host architecture to be known" />
-        )} */}
+        )}
         <Info text={`known architecture: ${knownArch}`} />
         <CodeTextArea
           value={fetchItConfig}
@@ -282,6 +304,7 @@ export function App() {
         />
         <Box
           style={{
+            backgroundColor: colors.backgroundSecondary,
             borderColor: "#535867",
             borderWidth: "1px",
             borderRadius: "0.25rem",
@@ -304,7 +327,7 @@ export function App() {
           Submit
         </Button>
         <ContainerList containers={fetchItContainers} />
-      </Stack>
+      </Stack> */}
       {/* <TextField>{windowState}</TextField> */}
     </Container>
   );
