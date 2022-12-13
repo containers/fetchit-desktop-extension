@@ -1,4 +1,4 @@
-import { styles } from "../style";
+import { styles, colors } from "../style";
 import {
   TextField,
   Radio,
@@ -91,6 +91,9 @@ const FetchItInput = (props: FetchItInputProps) => {
             sx={{
               input: {
                 color: "white",
+                backgroundColor: colors.backgroundSecondary,
+                borderColor: colors.borderColor,
+                borderWidth: "1px",
               },
             }}
             onChange={onURLChange}

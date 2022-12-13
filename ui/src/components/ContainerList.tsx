@@ -20,6 +20,7 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
+import { VpnLock } from "@mui/icons-material";
 
 type ContainerListProps = {
   containers: Container[];
@@ -268,38 +269,79 @@ const StyledTableRow = styled(TableRow)(({ theme }) => ({
 const ContainerList = (props: ContainerListProps) => {
   const { containers } = props;
   return (
-    <TableContainer component={Paper}>
-      <Table sx={{ minWidth: 700 }} aria-label="customized table">
-        <TableHead>
-          <TableRow>
-            <StyledTableCell align="right">Name</StyledTableCell>
-            <StyledTableCell align="right">Image</StyledTableCell>
-            <StyledTableCell align="right">Status</StyledTableCell>
-            <StyledTableCell align="right">State</StyledTableCell>
-            <StyledTableCell align="right">Created At</StyledTableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {containers.map((c, i) => {
-            const date = new Date(c.Created * 1000);
-            const createdAtStr = `${date.toLocaleDateString(
-              "en-US",
-            )} ${date.toLocaleTimeString("en-US")}`;
-            return (
-              <StyledTableRow key={i}>
-                <StyledTableCell component="th" scope="row">
-                  {c.Names[0].substring(1)}
-                </StyledTableCell>
-                <StyledTableCell align="right">{c.Image}</StyledTableCell>
-                <StyledTableCell align="right">{c.Status}</StyledTableCell>
-                <StyledTableCell align="right">{c.State}</StyledTableCell>
-                <StyledTableCell align="right">{createdAtStr}</StyledTableCell>
-              </StyledTableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <div className="min-w-full flex" slot="table">
+      <table className="w-full">
+        <thead>
+          <tr className="h-7 uppercase text-xs text-gray-300">
+            <th className="text-left">Name</th>
+            <th className="text-left">Image</th>
+            <th className="text-left">Status</th>
+          </tr>
+        </thead>
+        <tbody className="text-gray-200">
+          {testContainers.map((v, i) => (
+            <>
+              <tr
+                key={2 * i}
+                className="group w-full my-2 min-w-full h-12 bg-zinc-900 hover:bg-zinc-700 rounded-xl mx-4"
+              >
+                {/* <td className="whitespace-nowrap hover:cursor-pointer group">
+                  <div className="flex items-center text-sm text-gray-200 group-hover:text-violet-400">
+                    {v.Names[0].substring(1)}
+                  </div>
+                </td> */}
+                <td className="whitespace-nowrap mx-auto hover:cursor-pointer group group-hover:text-violet-400">
+                  <div className="flex items-center">
+                    {v.Names[0].substring(1)}
+                  </div>
+                </td>
+                <td className="whitespace-nowrap hover:cursor-pointer group group-hover:text-violet-400">
+                  <div className="flex items-center mx-auto">{v.Image}</div>
+                </td>
+                <td className="whitespace-nowrap hover:cursor-pointer group group-hover:text-violet-400">
+                  <div className="flex items-center mx-auto">{v.Status}</div>
+                </td>
+              </tr>
+              <tr key={2 * i + 1}>
+                <td className="leading-[8px]">&nbsp;</td>
+              </tr>
+            </>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    // <TableContainer component={Paper}>
+    //   <Table sx={{ minWidth: 700 }} aria-label="customized table">
+    //     <TableHead>
+    //       <TableRow>
+    //         <StyledTableCell align="right">Name</StyledTableCell>
+    //         <StyledTableCell align="right">Image</StyledTableCell>
+    //         <StyledTableCell align="right">Status</StyledTableCell>
+    //         <StyledTableCell align="right">State</StyledTableCell>
+    //         <StyledTableCell align="right">Created At</StyledTableCell>
+    //       </TableRow>
+    //     </TableHead>
+    //     <TableBody>
+    //       {containers.map((c, i) => {
+    //         const date = new Date(c.Created * 1000);
+    //         const createdAtStr = `${date.toLocaleDateString(
+    //           "en-US",
+    //         )} ${date.toLocaleTimeString("en-US")}`;
+    //         return (
+    //           <StyledTableRow key={i}>
+    //             <StyledTableCell component="th" scope="row">
+    //               {c.Names[0].substring(1)}
+    //             </StyledTableCell>
+    //             <StyledTableCell align="right">{c.Image}</StyledTableCell>
+    //             <StyledTableCell align="right">{c.Status}</StyledTableCell>
+    //             <StyledTableCell align="right">{c.State}</StyledTableCell>
+    //             <StyledTableCell align="right">{createdAtStr}</StyledTableCell>
+    //           </StyledTableRow>
+    //         );
+    //       })}
+    //     </TableBody>
+    //   </Table>
+    // </TableContainer>
   );
 };
 

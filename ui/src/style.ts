@@ -24,7 +24,7 @@ export const styles: ColorMap = {
     fontSize: 16,
     minHeight: "160px",
     height: "fit-content",
-    borderColor: "#535867",
+    borderColor: colors.borderColor,
     borderWidth: "1px",
     borderRadius: "0.25rem",
     fontFamily:

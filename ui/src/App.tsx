@@ -17,13 +17,14 @@ import type {
   ContainerDetails,
   FetchItConfigMethod,
 } from "./types";
+import { PlatformInfo } from "./types";
 import { load, dump } from "js-yaml";
 import ContainerList from "./components/ContainerList";
 import { colors, styles } from "./style";
 import { OpenDialogResult } from "@docker/extension-api-client-types/dist/v1/dialog";
 import FetchItInput from "./components/FetchitInput";
 import { isNativeError } from "util/types";
-
+import "./index.css";
 // Note: This line relies on Docker Desktop's presence as a host application.
 // If you're running this React app in a browser, it won't work properly.
 const FetchItContainerName = "podman-desktop-fetchit";
@@ -36,6 +37,11 @@ const getDockerDesktopClient = (): v1.DockerDesktopClient => {
   return window.ddClient as v1.DockerDesktopClient;
 };
 
+// const podmanMachineSocketsDirectoryMac = path.resolve(
+//   os.homedir(),
+//   ".local/share/containers/podman/machine",
+// );
+
 export function App() {
   const [podmanInfo, setPodmanInfo] = useState("");
   const [debugInfo, setDebugInfo] = useState("");
@@ -43,7 +49,7 @@ export function App() {
   const [fetchItConfig, setFetchItConfig] = useState("");
   const [fetchItConfigURL, setFetchItConfigURL] = useState("");
   const [fetchItConfigType, setFetchItConfigType] =
-    useState<FetchItConfigMethod>("manual");
+    useState<FetchItConfigMethod>("url");
   const [knownArch, setKnownArch] = useState("");
   const [containers, setContainers] = useState<ContainerResponse[]>([]);
   // these states are used for performing the first initialization of FetchIt
@@ -58,7 +64,7 @@ export function App() {
     const fetchItArm = `${fetchItRepo}/fetchit-arm`;
     const fetchItAmd = `${fetchItRepo}/fetchit-amd`;
     // this is the one where we just try it and see if it works
-    const fetchItDefault = `${fetchItRepo}/fetchit-arm`;
+    const fetchItDefault = `${fetchItRepo}/fetchit`;
     switch (archDetected) {
       case "amd":
         return fetchItAmd;
@@ -88,6 +94,19 @@ export function App() {
     }
   };
 
+  // FIXME: have th
+  const getHostPodmanSocketPath = (): string => {
+    switch (ddClient.host.platform) {
+      case "linux":
+        return "/run/user/1000/podman/podman.sock";
+      case "darwin":
+        // FIXME: get this information programatically
+        return "/Users/{redacted}/.local/share/containers/podman/machine/podman-machine-default/podman.sock";
+      default:
+        // not supported
+        throw new Error("current platform is not yet supported");
+    }
+  };
   const getFetchItContainers = async (): Promise<ContainerResponse[]> => {
     try {
       const myContainers =
@@ -111,10 +130,14 @@ export function App() {
    * @param configURL URL to a FetchIt config
    * @returns environment variable to configure fetchit
    */
-  const getFetchItConfig = (config: string, configURL: string): string => {
+  const getFetchItConfig = (
+    configMethod: FetchItConfigMethod,
+    config: string,
+    configURL: string,
+  ): string => {
     // determine mode
     let fetchItConfigOpt: string;
-    switch (fetchItConfigType) {
+    switch (configMethod) {
       case "manual":
         const serializedYaml = load(config);
         const normalizedYAML = dump(serializedYaml, {
@@ -137,11 +160,24 @@ export function App() {
     const fetchItImage = getFetchItImage();
     // normalize yaml so it's safe to load as an environment variable
     updateDebugInfo("using fetchit image: " + fetchItImage);
-    const fetchItConfigOpt = getFetchItConfig(config, configURL);
+    const fetchItConfigOpt = getFetchItConfig(
+      fetchItConfigType,
+      config,
+      configURL,
+    );
     updateDebugInfo(
       "passing in the following config argument:\n" + fetchItConfigOpt,
     );
-
+    // FIXME: grab platform information from ddClient
+    // currently this relies on issue:https://github.com/containers/podman-desktop/issues/986
+    let socketPath: string;
+    try {
+      socketPath = getHostPodmanSocketPath();
+    } catch (e) {
+      setDebugInfo("could not get podman socket: " + e);
+      return;
+    }
+    const fetchItPodmanSocket = `${socketPath}:/run/podman/podman.sock`;
     try {
       await ddClient.docker.cli
         .exec("run", [
@@ -155,7 +191,7 @@ export function App() {
           "--label",
           `${OwnedByLabel}=${OwnedByValue}`,
           "-v",
-          "/run/user/1000/podman/podman.sock:/run/podman/podman.sock",
+          fetchItPodmanSocket,
           "--security-opt",
           "label=disable",
           fetchItImage,
@@ -274,6 +310,13 @@ export function App() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // useEffect(() => {
+  //   // read platform info
+  //   setDebugInfo(
+  //     `arch: ${ddClient.host.arch}, platform: ${ddClient.host.platform}`,
+  //   );
+  // });
 
   const fetchItContainers = containers.filter((c) => {
     const fetchItLabel = c.Labels["owned-by"];
@@ -405,16 +448,6 @@ export function App() {
           fetchItConfigURL={fetchItConfigURL}
           onURLChange={handleFetchItConfigURLChange}
         />
-        {debugInfo !== "" && (
-          <Box style={styles.box}>
-            <Info text={debugInfo} />
-          </Box>
-        )}
-        {podmanInfo !== "" && (
-          <Box style={styles.box}>
-            <Info text={podmanInfo} />
-          </Box>
-        )}
         <Button
           onClick={() => launchFetchIt(fetchItConfig, fetchItConfigURL)}
           sx={{
@@ -426,7 +459,18 @@ export function App() {
         >
           Submit
         </Button>
-        <Typography variant="h2" style={styles.typeographyPrimary}>
+        {debugInfo !== "" && (
+          <Box style={styles.box}>
+            <Info text={debugInfo} />
+          </Box>
+        )}
+        {podmanInfo !== "" && (
+          <Box style={styles.box}>
+            <Info text={podmanInfo} />
+          </Box>
+        )}
+        <div className="min-w-full border-t-white border-t pt-4"></div>
+        <Typography variant="h6" style={styles.typeographyPrimary}>
           Running Containers
         </Typography>
         <ContainerList containers={fetchItContainers} />

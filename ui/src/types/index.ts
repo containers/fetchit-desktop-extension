@@ -85,3 +85,9 @@ export type ContainerDetails = {
 } & Container;
 
 export type FetchItConfigMethod = "url" | "manual";
+
+export interface PlatformInfo {
+  value: string;
+  arch: string;
+  platform: string;
+}
