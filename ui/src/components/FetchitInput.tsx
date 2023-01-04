@@ -1,3 +1,4 @@
+import React from "react";
 import { styles, colors } from "../style";
 import {
   TextField,
@@ -7,6 +8,7 @@ import {
   FormLabel,
   FormControlLabel,
   Box,
+  RadioProps,
 } from "@mui/material";
 import CodeTextArea from "@uiw/react-textarea-code-editor";
 import type { FetchItConfigMethod } from "../types";
@@ -21,9 +23,16 @@ type FetchItInputProps = {
     event: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>,
   ) => void;
   fetchItConfigURL: string;
+  disabled?: boolean;
 };
 
-const FetchItInput = (props: FetchItInputProps) => {
+const CustomRadio = (props: RadioProps) => {
+  return <Radio {...props} />;
+};
+
+const FetchItInput: React.FC<FetchItInputProps> = (
+  props: FetchItInputProps,
+) => {
   const {
     onCodeAreaChange,
     codeAreaValue,
@@ -31,6 +40,7 @@ const FetchItInput = (props: FetchItInputProps) => {
     fetchItConfigType,
     onURLChange,
     fetchItConfigURL,
+    disabled,
   } = props;
 
   return (
@@ -55,14 +65,32 @@ const FetchItInput = (props: FetchItInputProps) => {
           <FormControlLabel
             value="url"
             sx={styles.typeographySecondary}
-            control={<Radio />}
+            control={
+              <Radio
+                sx={{
+                  "&, &.Mui-checked": {
+                    color: "#8c4afd",
+                  },
+                }}
+              />
+            }
             label="URL"
+            // color="#8c4afd"
           />
           <FormControlLabel
             value="manual"
-            control={<Radio />}
+            control={
+              <Radio
+                sx={{
+                  "&, &.Mui-checked": {
+                    color: "#8c4afd",
+                  },
+                }}
+              />
+            }
             label="Manual Config"
             sx={styles.typeographySecondary}
+            // color="#8c4afd"
           />
         </RadioGroup>
       </FormControl>
@@ -82,6 +110,7 @@ const FetchItInput = (props: FetchItInputProps) => {
             padding={15}
             onChange={onCodeAreaChange}
             style={styles.codeEditor}
+            disabled={disabled}
           />
         ) : (
           <TextField
@@ -98,6 +127,7 @@ const FetchItInput = (props: FetchItInputProps) => {
             }}
             onChange={onURLChange}
             value={fetchItConfigURL}
+            disabled={disabled}
           />
         )}
       </Box>

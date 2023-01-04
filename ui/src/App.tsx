@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Button from "@mui/material/Button";
+import LoadingButton from "@mui/lab/LoadingButton";
+
 // import { createDockerDesktopClient } from "@docker/extension-api-client";
 import { v1 } from "@docker/extension-api-client-types";
 import {
@@ -25,6 +27,9 @@ import { OpenDialogResult } from "@docker/extension-api-client-types/dist/v1/dia
 import FetchItInput from "./components/FetchitInput";
 import { isNativeError } from "util/types";
 import "./index.css";
+import MessageBox from "./components/MessageBox";
+import StatusIndicator from "./components/StatusIndicator";
+
 // Note: This line relies on Docker Desktop's presence as a host application.
 // If you're running this React app in a browser, it won't work properly.
 const FetchItContainerName = "podman-desktop-fetchit";
@@ -44,18 +49,19 @@ const getDockerDesktopClient = (): v1.DockerDesktopClient => {
 
 export function App() {
   const [podmanInfo, setPodmanInfo] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [debugInfo, setDebugInfo] = useState("");
-  const [ready, setReady] = useState(false);
   const [fetchItConfig, setFetchItConfig] = useState("");
   const [fetchItConfigURL, setFetchItConfigURL] = useState("");
   const [fetchItConfigType, setFetchItConfigType] =
     useState<FetchItConfigMethod>("url");
-  const [knownArch, setKnownArch] = useState("");
   const [containers, setContainers] = useState<ContainerResponse[]>([]);
   // these states are used for performing the first initialization of FetchIt
   // in the event that the extension refreshes but a config exists
   const [timesContainersFetched, setTimesContainersFetched] = useState(0);
   const [fetchItNeedsConfig, setFetchItNeedsConfig] = useState(true);
+  const [fetchItRunning, setFetchItRunning] = useState(false);
   const ddClient: v1.DockerDesktopClient = getDockerDesktopClient();
 
   const getFetchItImage = (): string => {
@@ -84,12 +90,12 @@ export function App() {
 
   const fetchLatestContainers = async (): Promise<ContainerResponse[]> => {
     try {
-      const containers = (await ddClient.docker.listContainers({
+      const latestContainers = (await ddClient.docker.listContainers({
         all: true,
       })) as ContainerResponse[];
-      return containers;
+      return latestContainers;
     } catch (e) {
-      setDebugInfo("could not fetch containers: " + e);
+      setError("could not fetch containers: " + e);
       return [];
     }
   };
@@ -101,7 +107,7 @@ export function App() {
         return "/run/user/1000/podman/podman.sock";
       case "darwin":
         // FIXME: get this information programatically
-        return "/Users/{redacted}/.local/share/containers/podman/machine/podman-machine-default/podman.sock";
+        return "/Users/osilkin/.local/share/containers/podman/machine/podman-machine-default/podman.sock";
       default:
         // not supported
         throw new Error("current platform is not yet supported");
@@ -119,7 +125,7 @@ export function App() {
       });
       return fetchItContainers;
     } catch (e) {
-      setDebugInfo("could not list containers: " + e);
+      setError("could not list containers: " + e);
       return [];
     }
   };
@@ -174,7 +180,7 @@ export function App() {
     try {
       socketPath = getHostPodmanSocketPath();
     } catch (e) {
-      setDebugInfo("could not get podman socket: " + e);
+      setError("could not get podman socket: " + e);
       return;
     }
     const fetchItPodmanSocket = `${socketPath}:/run/podman/podman.sock`;
@@ -199,42 +205,26 @@ export function App() {
         .then((r) => {
           setDebugInfo("got response back from podman");
           if (r.stderr !== "") {
-            setPodmanInfo(r.stderr);
+            setError(r.stderr);
           } else {
             setPodmanInfo(r.stdout);
+            setSuccess(
+              "Successfully started FetchIt container 🚀🌕 '" +
+                FetchItContainerName +
+                "'",
+            );
             // ddClient.desktopUI.toast.success("created fetchit container");
           }
         })
         .catch((e) => {
           // ddClient.desktopUI.toast.error("failed to launch fetchit");
-          setDebugInfo("got an error when calling docker cli:" + e);
+          setError("got an error when calling docker cli:" + e);
         });
       setDebugInfo("done calling the docker cli");
     } catch (e) {
-      setDebugInfo("uh oh, we've reached an error condition: " + e);
+      setError("uh oh, we've reached an error condition: " + e);
     }
   };
-  const getImages = async () => {
-    // await ddClient.docker.listImages().then((r) => console.log("images:", r));
-    await ddClient.docker.cli
-      .exec("image", ["list"])
-      .then((r) => console.log("got result:"));
-  };
-
-  //  TODO: use this once host information is exposed
-  // initialization hook
-  useEffect(() => {
-    const checkInterval = setInterval(() => {
-      const dockerClient = window.ddClient as v1.DockerDesktopClient;
-      if (dockerClient.host.arch !== "") {
-        setKnownArch(ddClient.host.arch);
-        setReady(true);
-      }
-    }, 200);
-    if (ready) {
-      clearInterval(checkInterval);
-    }
-  }, [ready]);
 
   useEffect(() => {
     // not a valid state for initializaiton
@@ -278,25 +268,39 @@ export function App() {
         if (!fetchitDetails.Config) {
           return;
         }
+
         const extractedConfigEnv = fetchitDetails.Config.Env.find((e) =>
           e.startsWith(FetchItConfigEnv),
         );
-        if (typeof extractedConfigEnv === "undefined") {
+        const extractedConfigURLEnv = fetchitDetails.Config.Env.find((e) =>
+          e.startsWith(FetchItConfigURLEnv),
+        );
+
+        if (typeof extractedConfigEnv !== "undefined") {
+          // strip out "CONFIG_NAME=" so only raw yaml is left
+          const rawConfig = extractedConfigEnv.substring(
+            FetchItConfigEnv.length + 1,
+          );
+          const serializedConfig = load(rawConfig);
+          const normalizedConfig = dump(serializedConfig, {
+            forceQuotes: true,
+            quotingType: '"',
+            sortKeys: true,
+          });
+          setFetchItConfigType("manual");
+          setFetchItConfig(normalizedConfig);
           return;
         }
-        // strip out "CONFIG_NAME=" so only raw yaml is left
-        const rawConfig = extractedConfigEnv.substring(
-          FetchItConfigEnv.length + 1,
-        );
-        const serializedConfig = load(rawConfig);
-        const normalizedConfig = dump(serializedConfig, {
-          forceQuotes: true,
-          quotingType: '"',
-          sortKeys: true,
-        });
-        setFetchItConfig(normalizedConfig);
+        if (typeof extractedConfigURLEnv !== "undefined") {
+          const configURL = extractedConfigURLEnv.substring(
+            FetchItConfigURLEnv.length + 1,
+          );
+          setFetchItConfigType("url");
+          setFetchItConfigURL(configURL);
+          return;
+        }
       })
-      .catch((e) => setDebugInfo("could not inspect fetchit container: " + e));
+      .catch((e) => setError("could not inspect fetchit container: " + e));
     setFetchItNeedsConfig(false);
   }, [timesContainersFetched]);
 
@@ -311,12 +315,15 @@ export function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // useEffect(() => {
-  //   // read platform info
-  //   setDebugInfo(
-  //     `arch: ${ddClient.host.arch}, platform: ${ddClient.host.platform}`,
-  //   );
-  // });
+  useEffect(() => {
+    const fetchItContainer = containers.find((c) => {
+      const containerName = c.Names.find((n) =>
+        n.includes(FetchItContainerName),
+      );
+      return typeof containerName !== "undefined";
+    });
+    setFetchItRunning(typeof fetchItContainer !== "undefined");
+  }, [containers]);
 
   const fetchItContainers = containers.filter((c) => {
     const fetchItLabel = c.Labels["owned-by"];
@@ -336,83 +343,6 @@ export function App() {
     setFetchItConfigURL(e.target.value);
   };
 
-  //  TODO: make this work once host information is available within ddClient
-  // const [arch, setArch] = useState("");
-  // useEffect(() => {
-  //   const interval = setInterval(() => {
-  //     const ddClient: v1.DockerDesktopClient =
-  //       window.ddClient as v1.DockerDesktopClient;
-  //     if (typeof ddClient === "undefined") {
-  //       setArch("arch not ready yet");
-  //       return;
-  //     }
-  //     if (typeof ddClient.host === "undefined") {
-  //       setArch("docker client exists but arch is not ready yet");
-  //       return;
-  //     }
-  //     if (ddClient.host.arch === "") {
-  //       setArch("host exists but arch is not available");
-  //       return;
-  //     }
-  //     setArch(ddClient.host.arch);
-  //   }, 500);
-  //   return () => clearInterval(interval);
-  // }, []);
-
-  // try {
-  //   // const ddClient = createDockerDesktopClient();
-  //   // const platformInfo = window.platformInfo;
-  // } catch (e) {
-  //   return (
-  //     <Container
-  //       style={{
-  //         backgroundColor: colors.backgroundPrimary,
-  //       }}
-  //     >
-  //       <Typography variant="h2" style={styles.typeographyPrimary}>
-  //         Could not create ddclient: {e}
-  //       </Typography>
-  //     </Container>
-  //   );
-  // }
-  // return (
-  //   <Container
-  //     style={{
-  //       backgroundColor: colors.backgroundPrimary,
-  //     }}
-  //   >
-  //     <Typography variant="h2" style={styles.typeographyPrimary}>
-  //       detected arch: {arch}
-  //     </Typography>
-  //   </Container>
-  // );
-
-  // try {
-  //   // const ddClient = createDockerDesktopClient();
-  // } catch (e) {
-  //   return (
-  //     <Container
-  //       style={{
-  //         backgroundColor: colors.backgroundPrimary,
-  //       }}
-  //     >
-  //       <Typography variant="h2" style={styles.typeographyPrimary}>
-  //         Could not create ddClient: {e}
-  //       </Typography>
-  //     </Container>
-  //   );
-  // } finally {
-  //   <Container
-  //     style={{
-  //       backgroundColor: colors.backgroundPrimary,
-  //     }}
-  //   >
-  //     <Typography variant="h2" style={styles.typeographyPrimary}>
-  //       Successfully created the docker desktop client
-  //     </Typography>
-  //   </Container>;
-  // }
-
   return (
     <Container
       style={{
@@ -430,16 +360,8 @@ export function App() {
         Please provide a configuration for your FetchIt instance:
       </Typography>
       {/* {ready && ( */}
+
       <Stack direction="column" alignItems="start" spacing={2} sx={{ mt: 4 }}>
-        {/* {ready ? (
-          <Info
-            text={`FetchIt is ready, using image: ${getFetchItImage()} since we detected architecture: ${
-              ddClient.host.arch
-            }`}
-          />
-        ) : (
-          <Info text="FetchIt is still loading, waiting for host architecture to be known" />
-        )} */}
         <FetchItInput
           codeAreaValue={fetchItConfig}
           onCodeAreaChange={(e) => setFetchItConfig(e.target.value)}
@@ -447,35 +369,37 @@ export function App() {
           onFetchItConfigTypeChange={handleFetchItConfigTypeChange}
           fetchItConfigURL={fetchItConfigURL}
           onURLChange={handleFetchItConfigURLChange}
+          disabled={timesContainersFetched < 1}
         />
-        <Button
+        <LoadingButton
           onClick={() => launchFetchIt(fetchItConfig, fetchItConfigURL)}
           sx={{
             mt: 2,
             backgroundColor: colors.buttonPrimary,
           }}
           variant="contained"
-          // style={styles.box}
+          loading={timesContainersFetched < 1}
         >
           Submit
-        </Button>
-        {debugInfo !== "" && (
-          <Box style={styles.box}>
-            <Info text={debugInfo} />
-          </Box>
-        )}
+        </LoadingButton>
+        <MessageBox
+          msg={success}
+          boxType="success"
+          onClose={() => setSuccess("")}
+        />
+        <MessageBox msg={error} boxType="error" onClose={() => setError("")} />
         {podmanInfo !== "" && (
           <Box style={styles.box}>
             <Info text={podmanInfo} />
           </Box>
         )}
-        <div className="min-w-full border-t-white border-t pt-4"></div>
+        <div className="min-w-full border-t-[#8c4afd] border-t pt-4"></div>
+        <StatusIndicator isRunning={fetchItRunning} />
         <Typography variant="h6" style={styles.typeographyPrimary}>
           Running Containers
         </Typography>
         <ContainerList containers={fetchItContainers} />
       </Stack>
-      {/* )} */}
       {/* <TextField>{windowState}</TextField> */}
     </Container>
   );
