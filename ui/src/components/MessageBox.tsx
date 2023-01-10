@@ -1,4 +1,4 @@
-import { Box, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { twMerge } from "tailwind-merge";
 
@@ -26,11 +26,20 @@ const MessageBox = (props: MessageBoxProps) => {
   const finalClassName = twMerge(staticClassName, colorModifier);
   return (
     <Box className={finalClassName}>
-      <div className="flex flex-wrap justify-between">
-        <h1>Error:</h1>
+      {/* <div className="flex flex-wrap justify-between">
+        {boxType === "error" && <h1>Error:</h1>}
         <CloseIcon onClick={onClose} className="text-white cursor-pointer" />
       </div>
-      <Typography>{msg}</Typography>
+      <p>{msg}</p> */}
+      <div className="flex  justify-between">
+        <div className="pr-2">
+          <h1>{boxType === "error" ? "Error:" : "Success:"}</h1>
+          <p>{msg}</p>
+        </div>
+        <div className="text-black px-2 w-fit max-w-fit">
+          <CloseIcon className="cursor-pointer text-white" onClick={onClose} />
+        </div>
+      </div>
     </Box>
   );
 };

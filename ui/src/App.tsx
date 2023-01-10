@@ -1,34 +1,24 @@
 import React, { useEffect, useState } from "react";
-import Button from "@mui/material/Button";
 import LoadingButton from "@mui/lab/LoadingButton";
 
 // import { createDockerDesktopClient } from "@docker/extension-api-client";
 import { v1 } from "@docker/extension-api-client-types";
-import {
-  Stack,
-  TextField,
-  Typography,
-  Container,
-  Box,
-  Backdrop,
-} from "@mui/material";
-import CodeTextArea from "@uiw/react-textarea-code-editor";
-import Info from "./Log";
-import type {
-  Container as ContainerResponse,
-  ContainerDetails,
-  FetchItConfigMethod,
-} from "./types";
-import { PlatformInfo } from "./types";
+import { Stack, Typography, Container } from "@mui/material";
 import { load, dump } from "js-yaml";
+
 import ContainerList from "./components/ContainerList";
-import { colors, styles } from "./style";
-import { OpenDialogResult } from "@docker/extension-api-client-types/dist/v1/dialog";
 import FetchItInput from "./components/FetchitInput";
-import { isNativeError } from "util/types";
-import "./index.css";
 import MessageBox from "./components/MessageBox";
 import StatusIndicator from "./components/StatusIndicator";
+import StopFetchIt from "./components/StopFetchIt";
+
+import { colors, styles } from "./style";
+import "./index.css";
+import {
+  type Container as ContainerResponse,
+  type ContainerDetails,
+  type FetchItConfigMethod,
+} from "./types";
 
 // Note: This line relies on Docker Desktop's presence as a host application.
 // If you're running this React app in a browser, it won't work properly.
@@ -37,6 +27,9 @@ const FetchItConfigEnv = "FETCHIT_CONFIG";
 const FetchItConfigURLEnv = "FETCHIT_CONFIG_URL";
 const OwnedByLabel = "owned-by";
 const OwnedByValue = "fetchit-podman-desktop";
+
+// 60s
+const PodmanAPIPollRate = 20000;
 
 const getDockerDesktopClient = (): v1.DockerDesktopClient => {
   return window.ddClient as v1.DockerDesktopClient;
@@ -56,13 +49,28 @@ export function App() {
   const [fetchItConfigURL, setFetchItConfigURL] = useState("");
   const [fetchItConfigType, setFetchItConfigType] =
     useState<FetchItConfigMethod>("url");
+  const [stopModalOpen, setStopModalOpen] = useState(false);
+
   const [containers, setContainers] = useState<ContainerResponse[]>([]);
   // these states are used for performing the first initialization of FetchIt
   // in the event that the extension refreshes but a config exists
   const [timesContainersFetched, setTimesContainersFetched] = useState(0);
   const [fetchItNeedsConfig, setFetchItNeedsConfig] = useState(true);
   const [fetchItRunning, setFetchItRunning] = useState(false);
+  const [fetchItContainerID, setFetchItContainerID] = useState("");
+  const [fetchItShuttingDown, setFetchItShuttingDown] = useState(false);
+  const [includeContainers, setIncludeContainers] = useState(false);
+
   const ddClient: v1.DockerDesktopClient = getDockerDesktopClient();
+
+  const handleStopModalOpen = () => {
+    // ensure that the modal always opens with this setting disabled
+    setIncludeContainers(false);
+    setStopModalOpen(true);
+  };
+  const handleStopModalClose = () => {
+    setStopModalOpen(false);
+  };
 
   const getFetchItImage = (): string => {
     const archDetected = ddClient.host.arch;
@@ -100,33 +108,19 @@ export function App() {
     }
   };
 
-  // FIXME: have th
   const getHostPodmanSocketPath = (): string => {
     switch (ddClient.host.platform) {
       case "linux":
         return "/run/user/1000/podman/podman.sock";
+      // FIXME: figure out a way to obtain the socket path from the host machine, or at least the ${currentUser}
       case "darwin":
-        // FIXME: get this information programatically
-        return "/Users/osilkin/.local/share/containers/podman/machine/podman-machine-default/podman.sock";
+        // return "/Users/${currentUser}/.local/share/containers/podman/machine/podman-machine-default/podman.sock";
+        throw new Error(
+          "podman socket path is not currently accessible on MacOS",
+        );
       default:
         // not supported
         throw new Error("current platform is not yet supported");
-    }
-  };
-  const getFetchItContainers = async (): Promise<ContainerResponse[]> => {
-    try {
-      const myContainers =
-        (await ddClient.docker.listContainers()) as ContainerResponse[];
-      const fetchItContainers = myContainers.filter((v) => {
-        const fetchitLabel = v.Labels["owned-by"];
-        return (
-          typeof fetchitLabel !== "undefined" && fetchitLabel === "fetchit"
-        );
-      });
-      return fetchItContainers;
-    } catch (e) {
-      setError("could not list containers: " + e);
-      return [];
     }
   };
 
@@ -161,7 +155,69 @@ export function App() {
     return fetchItConfigOpt;
   };
 
-  const launchFetchIt = async (config: string, configURL: string) => {
+  const shutDownFetchIt = async (
+    containerName: string,
+    ownedByLabel: string,
+    ownedByLabelValue: string,
+    includeCreatedContainers: boolean,
+  ): Promise<boolean> => {
+    const fetchItFilter = ["--filter", `name=${containerName}`];
+    const fetchItContainersFilter = [
+      "--filter",
+      `label=${ownedByLabel}=${ownedByLabelValue}`,
+    ];
+    const containerFilters = [
+      ...fetchItFilter,
+      //  ...fetchItContainersFilter
+    ];
+    if (includeCreatedContainers) {
+      containerFilters.push(...fetchItContainersFilter);
+    }
+    const timeArg = ["--time", "2"];
+    setFetchItShuttingDown(true);
+    try {
+      const stopResult = await ddClient.docker.cli.exec("container", [
+        "stop",
+        ...containerFilters,
+        ...timeArg,
+      ]);
+      if (stopResult.stderr) {
+        setError(
+          `received error from podman daemon while shutting down FetchIt: ${stopResult.stderr}`,
+        );
+        // return false;
+      } else {
+        updateDebugInfo(stopResult.stdout);
+        updateDebugInfo("");
+      }
+      const rmResult = await ddClient.docker.cli.exec("container", [
+        "rm",
+        ...containerFilters,
+        "--force",
+        ...timeArg,
+      ]);
+      if (rmResult.stderr) {
+        setError(`could not delete containers: ${rmResult.stderr}`);
+        // return false;
+      } else {
+        updateDebugInfo(rmResult.stdout);
+      }
+    } catch (e) {
+      setError(`error calling the podman cli: ${e}`);
+      return false;
+    } finally {
+      setFetchItShuttingDown(false);
+    }
+    updateDebugInfo("successfully stopped & removed fetchit container");
+    return true;
+  };
+
+  //  FIXME: this function causes a high CPU load
+  const launchFetchIt = async (
+    config: string,
+    configURL: string,
+    fetchItIsRunning: boolean,
+  ) => {
     updateDebugInfo("launching docker cli");
     const fetchItImage = getFetchItImage();
     // normalize yaml so it's safe to load as an environment variable
@@ -185,6 +241,21 @@ export function App() {
     }
     const fetchItPodmanSocket = `${socketPath}:/run/podman/podman.sock`;
     try {
+      // shut down the currently running instance if it exists
+      if (fetchItIsRunning) {
+        const shouldContinue = await shutDownFetchIt(
+          FetchItContainerName,
+          OwnedByLabel,
+          OwnedByValue,
+          false,
+        );
+        if (!shouldContinue) {
+          // debug
+          updateDebugInfo(`received signal to not continue`);
+          // normal mode
+          return;
+        }
+      }
       await ddClient.docker.cli
         .exec("run", [
           "-d",
@@ -203,29 +274,26 @@ export function App() {
           fetchItImage,
         ])
         .then((r) => {
-          setDebugInfo("got response back from podman");
+          updateDebugInfo("got response back from podman");
           if (r.stderr !== "") {
             setError(r.stderr);
           } else {
             setPodmanInfo(r.stdout);
             setSuccess(
-              "Successfully started FetchIt container 🚀🌕 '" +
-                FetchItContainerName +
-                "'",
+              `Created FetchIt container '${FetchItContainerName}' 🚀🌕`,
             );
-            // ddClient.desktopUI.toast.success("created fetchit container");
           }
         })
         .catch((e) => {
           // ddClient.desktopUI.toast.error("failed to launch fetchit");
           setError("got an error when calling docker cli:" + e);
         });
-      setDebugInfo("done calling the docker cli");
     } catch (e) {
       setError("uh oh, we've reached an error condition: " + e);
     }
   };
 
+  // this effect only runs fully once, returns otherwise
   useEffect(() => {
     // not a valid state for initializaiton
     if (timesContainersFetched !== 1 || !fetchItNeedsConfig) {
@@ -254,6 +322,7 @@ export function App() {
       .exec("inspect", [FetchItContainerName])
       .then((r) => {
         if (r.stderr !== "") {
+          setError(`could not load existing FetchIt config: ${r.stderr}'`);
           return;
         }
         const containerList = JSON.parse(r.stdout) as ContainerDetails[];
@@ -269,49 +338,40 @@ export function App() {
           return;
         }
 
-        const extractedConfigEnv = fetchitDetails.Config.Env.find((e) =>
-          e.startsWith(FetchItConfigEnv),
-        );
-        const extractedConfigURLEnv = fetchitDetails.Config.Env.find((e) =>
-          e.startsWith(FetchItConfigURLEnv),
-        );
-
-        if (typeof extractedConfigEnv !== "undefined") {
-          // strip out "CONFIG_NAME=" so only raw yaml is left
-          const rawConfig = extractedConfigEnv.substring(
-            FetchItConfigEnv.length + 1,
-          );
-          const serializedConfig = load(rawConfig);
-          const normalizedConfig = dump(serializedConfig, {
-            forceQuotes: true,
-            quotingType: '"',
-            sortKeys: true,
-          });
-          setFetchItConfigType("manual");
-          setFetchItConfig(normalizedConfig);
-          return;
-        }
-        if (typeof extractedConfigURLEnv !== "undefined") {
-          const configURL = extractedConfigURLEnv.substring(
-            FetchItConfigURLEnv.length + 1,
-          );
-          setFetchItConfigType("url");
-          setFetchItConfigURL(configURL);
-          return;
-        }
+        fetchitDetails.Config.Env.forEach((e) => {
+          const [envName, value] = e.split("=");
+          if (envName === FetchItConfigEnv) {
+            const serializedConfig = load(value);
+            const normalizedConfig = dump(serializedConfig, {
+              forceQuotes: true,
+              quotingType: '"',
+              sortKeys: true,
+            });
+            setFetchItConfigType("manual");
+            setFetchItConfig(normalizedConfig);
+            return;
+          }
+          if (envName === FetchItConfigURLEnv) {
+            setFetchItConfigType("url");
+            setFetchItConfigURL(value);
+            return;
+          }
+        });
       })
       .catch((e) => setError("could not inspect fetchit container: " + e));
     setFetchItNeedsConfig(false);
   }, [timesContainersFetched]);
 
+  // fetches the containers everytime
   useEffect(() => {
-    const interval = setInterval(async () => {
-      // filter out the fetchit containers
+    const updateContainerList = async () => {
       const latestContainers = await fetchLatestContainers();
       setContainers(latestContainers);
       setTimesContainersFetched(timesContainersFetched + 1);
-    }, 5000);
-
+    };
+    // run once on start
+    updateContainerList();
+    const interval = setInterval(updateContainerList, PodmanAPIPollRate);
     return () => clearInterval(interval);
   }, []);
 
@@ -322,8 +382,17 @@ export function App() {
       );
       return typeof containerName !== "undefined";
     });
-    setFetchItRunning(typeof fetchItContainer !== "undefined");
-  }, [containers]);
+    if (
+      typeof fetchItContainer !== "undefined" &&
+      fetchItContainerID !== fetchItContainer.Id
+    ) {
+      setFetchItContainerID(fetchItContainer.Id);
+    }
+    setFetchItRunning(
+      typeof fetchItContainer !== "undefined" &&
+        fetchItContainer.State === "running",
+    );
+  }, [containers, fetchItContainerID]);
 
   const fetchItContainers = containers.filter((c) => {
     const fetchItLabel = c.Labels["owned-by"];
@@ -343,25 +412,45 @@ export function App() {
     setFetchItConfigURL(e.target.value);
   };
 
+  const handleIncludeContainersChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    setIncludeContainers(event.target.checked);
+  };
+
+  const handleStopFetchIt = () => {
+    shutDownFetchIt(
+      FetchItContainerName,
+      OwnedByLabel,
+      OwnedByValue,
+      includeContainers,
+    );
+    setStopModalOpen(false);
+  };
   return (
     <Container
       style={{
         backgroundColor: colors.backgroundPrimary,
       }}
     >
-      <Typography variant="h1" style={styles.typeographyPrimary}>
-        FetchIt
-      </Typography>
-      <Typography
-        variant="body1"
-        style={styles.typeographySecondary}
-        sx={{ mt: 2 }}
-      >
+      <h1 className="mt-4 text-4xl text-white font-semibold">FetchIt</h1>
+      <div className="mt-4 text-slate-200">
         Please provide a configuration for your FetchIt instance:
-      </Typography>
+      </div>
+      <div
+        className="text-[#b88fff] min-w-full cursor-pointer hover:text-[#c5a5fc] "
+        onClick={() =>
+          ddClient.host.openExternal(
+            "https://fetchit.readthedocs.io/en/latest/methods.html",
+          )
+        }
+      >
+        Read about FetchIt Configuration
+      </div>
+
       {/* {ready && ( */}
 
-      <Stack direction="column" alignItems="start" spacing={2} sx={{ mt: 4 }}>
+      <Stack direction="column" alignItems="start" spacing={2} sx={{ mt: 2 }}>
         <FetchItInput
           codeAreaValue={fetchItConfig}
           onCodeAreaChange={(e) => setFetchItConfig(e.target.value)}
@@ -372,7 +461,9 @@ export function App() {
           disabled={timesContainersFetched < 1}
         />
         <LoadingButton
-          onClick={() => launchFetchIt(fetchItConfig, fetchItConfigURL)}
+          onClick={() =>
+            launchFetchIt(fetchItConfig, fetchItConfigURL, fetchItRunning)
+          }
           sx={{
             mt: 2,
             backgroundColor: colors.buttonPrimary,
@@ -382,21 +473,51 @@ export function App() {
         >
           Submit
         </LoadingButton>
+        {/* FIXME: turn this into a queue where messages are pushed and deleted after X seconds or deletion */}
         <MessageBox
           msg={success}
           boxType="success"
           onClose={() => setSuccess("")}
         />
         <MessageBox msg={error} boxType="error" onClose={() => setError("")} />
-        {podmanInfo !== "" && (
+        {/* {podmanInfo !== "" && (
           <Box style={styles.box}>
             <Info text={podmanInfo} />
           </Box>
-        )}
-        <div className="min-w-full border-t-[#8c4afd] border-t pt-4"></div>
+        )} */}
+        {/* {debugInfo !== "" && (
+          <Box style={styles.box}>
+            <Info text={debugInfo} />
+          </Box>
+        )} */}
+        <div className="min-w-full border-t-[#8c4afd] border-t pt-4" />
         <StatusIndicator isRunning={fetchItRunning} />
+        {/* <LoadingButton
+          variant="contained"
+          onClick={() => {
+            shutDownFetchIt(FetchItContainerName, OwnedByLabel, OwnedByValue);
+          }}
+          disabled={!fetchItRunning}
+          loading={fetchItShuttingDown}
+          className="bg-[#cb4d3e]"
+          sx={{
+            backgroundColor: "#cb4d3e",
+          }}
+        >
+          Stop FetchIt
+        </LoadingButton> */}
+        <StopFetchIt
+          handleClose={handleStopModalClose}
+          handleOpen={handleStopModalOpen}
+          open={stopModalOpen}
+          isFetchItRunning={fetchItRunning}
+          isFetchItShuttingDown={fetchItShuttingDown}
+          onIncludeContainersChanged={handleIncludeContainersChange}
+          includeCreatedContainers={includeContainers}
+          onStopClick={handleStopFetchIt}
+        />
         <Typography variant="h6" style={styles.typeographyPrimary}>
-          Running Containers
+          Created Containers
         </Typography>
         <ContainerList containers={fetchItContainers} />
       </Stack>

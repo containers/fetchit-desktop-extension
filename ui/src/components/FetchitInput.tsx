@@ -96,8 +96,7 @@ const FetchItInput: React.FC<FetchItInputProps> = (
       </FormControl>
       <Box
         sx={{
-          marginTop: 4,
-          marginBottom: 4,
+          marginTop: 2,
           width: "100%",
           minWidth: "100%",
         }}
