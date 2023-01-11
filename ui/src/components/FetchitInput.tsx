@@ -8,7 +8,6 @@ import {
   FormLabel,
   FormControlLabel,
   Box,
-  RadioProps,
 } from "@mui/material";
 import CodeTextArea from "@uiw/react-textarea-code-editor";
 import type { FetchItConfigMethod } from "../types";
@@ -24,10 +23,6 @@ type FetchItInputProps = {
   ) => void;
   fetchItConfigURL: string;
   disabled?: boolean;
-};
-
-const CustomRadio = (props: RadioProps) => {
-  return <Radio {...props} />;
 };
 
 const FetchItInput: React.FC<FetchItInputProps> = (

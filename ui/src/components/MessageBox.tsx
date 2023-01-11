@@ -1,3 +1,4 @@
+import React from "react";
 import { Box } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { twMerge } from "tailwind-merge";
@@ -8,7 +9,7 @@ type MessageBoxProps = {
   boxType: "error" | "success";
 };
 
-const MessageBox = (props: MessageBoxProps) => {
+const MessageBox: React.FC<MessageBoxProps> = (props: MessageBoxProps) => {
   const { msg, onClose, boxType } = props;
   if (msg.length === 0) {
     return null;

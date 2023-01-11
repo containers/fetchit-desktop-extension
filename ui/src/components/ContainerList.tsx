@@ -1,10 +1,13 @@
+import React from "react";
 import { Container } from "../types";
 
 type ContainerListProps = {
   containers: Container[];
 };
 
-const ContainerList = (props: ContainerListProps) => {
+const ContainerList: React.FC<ContainerListProps> = (
+  props: ContainerListProps,
+) => {
   const { containers } = props;
   return (
     <div className="min-w-full flex" slot="table">

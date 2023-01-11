@@ -40,7 +40,7 @@ const getDockerDesktopClient = (): v1.DockerDesktopClient => {
 //   ".local/share/containers/podman/machine",
 // );
 
-export function App() {
+const App: React.FC = () => {
   const [podmanInfo, setPodmanInfo] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -524,4 +524,6 @@ export function App() {
       {/* <TextField>{windowState}</TextField> */}
     </Container>
   );
-}
+};
+
+export { App };
