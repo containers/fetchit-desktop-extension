@@ -8,7 +8,7 @@
   },
   "ui": {
     "dashboard-tab": {
-      "title": "Fetchit",
+      "title": "FetchIt",
       "src": "index.html",
       "root": "ui",
       "backend": {

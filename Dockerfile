@@ -23,7 +23,7 @@ COPY ui /ui
 RUN npm run build
 
 FROM alpine
-LABEL org.opencontainers.image.title="Fetchit" \
+LABEL org.opencontainers.image.title="FetchIt" \
     org.opencontainers.image.description=" FetchIt is used to manage the life cycle and configuration of Podman containers" \
     org.opencontainers.image.vendor="Red Hat Inc." \
     com.docker.desktop.extension.api.version="0.3.0" \

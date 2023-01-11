@@ -7,7 +7,7 @@ import { Stack, Typography, Container } from "@mui/material";
 import { load, dump } from "js-yaml";
 
 import ContainerList from "./components/ContainerList";
-import FetchItInput from "./components/FetchitInput";
+import FetchItInput from "./components/FetchItInput";
 import MessageBox from "./components/MessageBox";
 import StatusIndicator from "./components/StatusIndicator";
 import StopFetchIt from "./components/StopFetchIt";
