@@ -7,19 +7,19 @@ This extension is a UI wrapper around FetchIt, providing a batteries-included ex
 <!-- ![FetchIt on Startup](./Screenshots/fetchit-init.png "FetchIt on Startup") -->
 
 <p align="center">
-	<img alt="FetchIt Running" src="./Screenshots/fetchit-running.png"  height="450" />
+	<img alt="FetchIt Running" title="FetchIt Running" src="./Screenshots/fetchit-running.png"  height="450" />
 </p>
 
 <!-- ![FetchIt Running](./Screenshots/fetchit-running.png "FetchIt Running") -->
 
 <p align="center">
-	<img alt="Configuring FetchIt Using YAML" src="./Screenshots/fetchit-yaml-config.png"  height="450" />
+	<img alt="Configuring FetchIt Using YAML" title="Configuring FetchIt with YAML" src="./Screenshots/fetchit-yaml-config.png"  height="450" />
 </p>
 
 <!-- ![Configuring FetchIt Using YAML](./Screenshots/fetchit-yaml-config.png "FetchIt YAML Config") -->
 
 <p align="center">
-	<img alt="Stopping FetchIt Containers" src="./Screenshots/fetchit-stop-containers.png"  height="450" />
+	<img alt="Stopping FetchIt Containers" title="Stopping FetchIt" src="./Screenshots/fetchit-stop-containers.png"  height="450" />
 </p>
 
 <!-- ![Stopping FetchIt Containers](./Screenshots/fetchit-stop-containers.png "Stopping FetchIt Containers") -->
